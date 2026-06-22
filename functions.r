@@ -1,5 +1,6 @@
 # Functions to be imported by other scripts
 
+# Descriptive statistics -------------------------------------------
 skewness <- function(data) {
   # Given a numeric vector, compute and return the empirical skewness
   mu <- mean(data)
@@ -21,7 +22,7 @@ kurtosis <- function(data) {
 # Test for quantile proposed in Kupiec (1995) ---------------------------------------
 kupiec_test <- function(mat_bool_exceptions, alpha) {
   # mat_bool_exceptions is a (M x K) matrix filled with 0s (no exception) and 1s (exception occurs)
-  # alpha is nominal VaR level (= 1 - coverage probability)
+  # alpha is nominal VaR level (= 1 - coverage probability, i. e. the probability of observing a realization of the random variable that is less than the VaR)
   M <- NROW(mat_bool_exceptions) # Number of predictions
   exceptions <- colSums(mat_bool_exceptions) # Number of exceptions for each time series
   L_obs <- ((1 - exceptions / M)^(M - exceptions)) * ((exceptions / M)^exceptions)
@@ -29,6 +30,46 @@ kupiec_test <- function(mat_bool_exceptions, alpha) {
   LR <- 2 * (log(L_obs) - log(L_H0))
   return(LR)
 }
+
+# Check function(s) ---------------------------------
+check_loss <- function(u, tau) {
+  check <- u * (tau - (u < 0))
+  return(check)
+}
+
+# Modified check loss function
+modified_check_loss = function(u, alpha, lambda){
+  # This function implements the modified (smooth) check loss function
+  # proposed in Lee (2012)
+
+  # Upper interval
+  if (u >= ((1 - alpha) / (lambda))) {
+    out <- u * alpha - (alpha * (1 - alpha)) / (2 * lambda)
+    return(out)
+  }
+  
+  # Upper-mid interval
+  if ( (0 <= u) & (u < ((1 - alpha) / (lambda))) ) {
+    out <- (lambda / 2) * (alpha / (1 - alpha)) * (u^2)
+    return(out)
+  }
+
+  # Lower-mid interval
+  if ( (-alpha/lambda <= u) & (u < 0) ) {
+    out <- (lambda / 2) * ((1 - alpha) / alpha) * (u^2)
+    return(out)
+  }
+
+  # Lower interval
+  if (u < -alpha / lambda) {
+    out <- -(1 - alpha) * u - (alpha * (1 - alpha)) / (2 * lambda)
+    return(out)
+  }
+  
+}
+
+
+
 
 # Test for quantile proposed in Christoffersen (1998) -------------------------------
 christoffersen_test <- function(mat_bool_exceptions, alpha) {
@@ -38,8 +79,8 @@ christoffersen_test <- function(mat_bool_exceptions, alpha) {
 
   # Independence step
   LR_ind <- numeric(length = NCOL(mat_bool_exceptions))
-  hit <- mat_bool_exceptions[2:M, ]
-  hit_lag1 <- mat_bool_exceptions[1:(M - 1), ]
+  hit <- matrix(mat_bool_exceptions[2:M, ], nrow = M - 1, ncol = NCOL(mat_bool_exceptions))
+  hit_lag1 <- matrix(mat_bool_exceptions[1:(M - 1), ], nrow = M - 1, ncol = NCOL(mat_bool_exceptions))
   for (j in 1:NCOL(mat_bool_exceptions)) {
     tab <- table(
       hit_lag1[, j],
@@ -74,51 +115,14 @@ christoffersen_test <- function(mat_bool_exceptions, alpha) {
   return(result)
 }
 
-
-
-
-# Modified check loss function ------------------------------------------------------
-modified_check_loss = function(u, alpha, lambda){
-  # This function implements the modified (smooth) check loss function
-  # proposed in Lee (2012)
-
-  # Upper interval
-  if (u >= ((1 - alpha) / (lambda))) {
-    out <- u * alpha - (alpha * (1 - alpha)) / (2 * lambda)
-    return(out)
-  }
-  
-  # Upper-mid interval
-  if ( (0 <= u) & (u < ((1 - alpha) / (lambda))) ) {
-    out <- (lambda / 2) * (alpha / (1 - alpha)) * (u^2)
-    return(out)
-  }
-
-  # Lower-mid interval
-  if ( (-alpha/lambda <= u) & (u < 0) ) {
-    out <- (lambda / 2) * ((1 - alpha) / alpha) * (u^2)
-    return(out)
-  }
-
-  # Lower interval
-  if (u < -alpha / lambda) {
-    out <- -(1 - alpha) * u - (alpha * (1 - alpha)) / (2 * lambda)
-    return(out)
-  }
-  
-}
-
 # Pseudo R^2 ------------------------------------------------------------------------
 # Goodness-of-fit measure for quantile regression
-# pseudo_R2 <- function(){
-
-
-
-
-
-
-
-# }
+pseudo_R2 <- function(y_true, q_pred_free, q_pred_constrained, tau){
+  v_hat <- sum(check_loss(y_true - q_pred_free, tau = tau))
+  v_tilde <- sum(check_loss(y_true - q_pred_constrained, tau = tau))
+  r_tau <- 1 - v_hat / v_tilde
+  return(r_tau)
+}
 
 
 
